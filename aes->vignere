@@ -1,0 +1,97 @@
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
+
+# Vigenere cipher functions (A-Z only)
+def vigenere_encrypt(text, key):
+    text = text.upper()
+    key = key.upper()
+    result = ''
+    for i in range(len(text)):
+        c = ord(text[i]) - 65
+        k = ord(key[i % len(key)]) - 65
+        result += chr((c + k) % 26 + 65)
+    return result
+
+def vigenere_decrypt(text, key):
+    key = key.upper()
+    result = ''
+    for i in range(len(text)):
+        c = ord(text[i]) - 65
+        k = ord(key[i % len(key)]) - 65
+        result += chr((c - k) % 26 + 65)
+    return result
+
+def aes_encrypt(data, aes_key):
+    data = data.encode()
+    cipher = AES.new(aes_key, AES.MODE_CBC)
+    ct_bytes = cipher.encrypt(pad(data, AES.block_size))
+    iv = cipher.iv.hex()
+    ct = ct_bytes.hex()
+    return iv, ct
+
+def aes_decrypt(iv_hex, ct_hex, aes_key):
+    iv = bytes.fromhex(iv_hex)
+    ct = bytes.fromhex(ct_hex)
+    cipher = AES.new(aes_key, AES.MODE_CBC, iv)
+    pt = unpad(cipher.decrypt(ct), AES.block_size)
+    return pt.decode()
+
+# Hex to A-Z conversion utilities for Vigenere compatibility
+def hex_to_letters(hex_str):
+    # Convert hex string (0-9,a-f) to uppercase letters (A-P) pairwise
+    # '0'–'9' → 'A'–'J', 'a'–'f' → 'K'–'P'
+    # combine two hex chars per letter for compactness
+    letters = []
+    for i in range(0, len(hex_str), 2):
+        pair = hex_str[i:i+2]
+        val = int(pair, 16)  # 0-255
+        # Map 0-255 into two letters (A-Z is 26 letters, so here simplified to letters A-P for hex digits)
+        # For simplicity, encode each hex digit as letter:
+        for ch in pair:
+            if ch.isdigit():
+                letters.append(chr(ord('A') + int(ch)))
+            else:
+                letters.append(chr(ord('K') + (ord(ch.lower()) - ord('a'))))
+    return ''.join(letters)
+
+def letters_to_hex(letters):
+    # Convert letters back to hex string
+    hex_chars = []
+    for ch in letters:
+        val = ord(ch)
+        if 'A' <= ch <= 'J':  # digits 0-9
+            hex_chars.append(str(val - ord('A')))
+        else:  # letters K-P → a-f
+            hex_chars.append(chr(val - ord('K') + ord('a')))
+    return ''.join(hex_chars)
+
+# Main
+plaintext = "INFORMATIONSECURITY"
+vig_key = "KEY"
+aes_key = b'ThisIsASecretKey'  # 16 bytes
+
+# Step 1: AES encrypt plaintext, get hex string
+iv, aes_ct_hex = aes_encrypt(plaintext, aes_key)
+print("AES Encrypted (Hex):", aes_ct_hex)
+
+# Step 2: Hex to letters for Vigenere
+letters = hex_to_letters(aes_ct_hex)
+print("Hex to Letters:", letters)
+
+# Step 3: Vigenere encrypt the letters
+vig_enc = vigenere_encrypt(letters, vig_key)
+print("Vigenere Encrypted:", vig_enc)
+
+# ======== Decryption ========
+
+# Step 4: Vigenere decrypt
+vig_dec = vigenere_decrypt(vig_enc, vig_key)
+print("Vigenere Decrypted:", vig_dec)
+
+# Step 5: Letters back to hex
+hex_back = letters_to_hex(vig_dec)
+print("Letters to Hex:", hex_back)
+
+# Step 6: AES decrypt
+plain_dec = aes_decrypt(iv, hex_back, aes_key)
+print("AES decrypted (Original Plaintext):", plain_dec)

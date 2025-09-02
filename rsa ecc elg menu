@@ -1,0 +1,141 @@
+import random
+from ecdsa import SigningKey, SECP256k1, VerifyingKey
+from math import gcd
+
+# RSA Functions
+def generate_rsa_keys():
+    # Small prime numbers for demonstration; in practice, use large primes
+    p, q = 61, 53
+    n = p * q
+    phi = (p-1)*(q-1)
+    e = 17  # public exponent
+    d = mod_inverse(e, phi)
+    return (e, n), (d, n)
+
+def mod_inverse(a, m):
+    m0, x0, x1 = m, 0, 1
+    if m == 1:
+        return 0
+    while a > 1:
+        q = a // m
+        a, m = m, a % m
+        x0, x1 = x1 - q * x0, x0
+    if x1 < 0:
+        x1 += m0
+    return x1
+
+def text_to_int(text):
+    return int.from_bytes(text.encode(), byteorder='big')
+
+def int_to_text(num):
+    length = (num.bit_length() + 7) // 8  # Calculate byte length
+    return num.to_bytes(length, byteorder='big').decode()
+
+def rsa_encrypt(message, pubkey):
+    e, n = pubkey
+    cipher = [pow(ord(c), e, n) for c in message]
+    return cipher
+
+def rsa_decrypt(ciphertext, privkey):
+    d, n = privkey
+    message = ''.join(chr(pow(c, d, n)) for c in ciphertext)
+    return message
+
+# ECC Functions (using ecdsa library)
+def ecc_generate_keys():
+    sk = SigningKey.generate(curve=SECP256k1)
+    vk = sk.verifying_key
+    return sk, vk
+
+def ecc_sign_message(sk, message):
+    sig = sk.sign(message.encode())
+    return sig
+
+def ecc_verify_signature(vk, message, signature):
+    try:
+        return vk.verify(signature, message.encode())
+    except:
+        return False
+
+# ElGamal Functions (simple integer version)
+def generate_elgamal_keys():
+    p = int(
+    "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E08"
+    "8A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD"
+    "3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44"
+    "C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117"
+    "C4B1FE649286651ECE65381FFFFFFFFFFFFFFFF", 16)
+     # prime number
+    g = 2    # primitive root modulo p
+    x = random.randint(1, p-2)  # private key
+    h = pow(g, x, p)
+    public_key = (p, g, h)
+    private_key = x
+    return public_key, private_key
+
+def elgamal_encrypt(m, pubkey):
+    p, g, h = pubkey
+    y = random.randint(1, p-2)
+    c1 = pow(g, y, p)
+    s = pow(h, y, p)
+    c2 = (m * s) % p
+    return (c1, c2)
+
+def elgamal_decrypt(ciphertext, privkey, p):
+    c1, c2 = ciphertext
+    s = pow(c1, privkey, p)
+    s_inv = mod_inverse(s, p)
+    m = (c2 * s_inv) % p
+    return m
+
+# Menu-driven interface
+def main():
+    while True:
+        print("\nMenu:")
+        print("1. RSA Encrypt/Decrypt")
+        print("2. ECC Sign/Verify")
+        print("3. ElGamal Encrypt/Decrypt")
+        print("4. Exit")
+        choice = input("Enter choice: ")
+        
+        if choice == '1':
+            pub, priv = generate_rsa_keys()
+            print(f"RSA Public key: {pub}")
+            plaintext = input("Enter message to encrypt: ")
+            ciphertext = rsa_encrypt(plaintext, pub)
+            print("Encrypted:", ciphertext)
+            decrypted = rsa_decrypt(ciphertext, priv)
+            print("Decrypted:", decrypted)
+            
+        elif choice == '2':
+            sk, vk = ecc_generate_keys()
+            print("ECC keys generated.")
+            message = input("Enter message to sign: ")
+            signature = ecc_sign_message(sk, message)
+            print("Signature (hex):", signature.hex())
+            verified = ecc_verify_signature(vk, message, signature)
+            print("Signature verified:", verified)
+            
+        elif choice == '3':
+            pubkey, privkey = generate_elgamal_keys()
+            print(f"ElGamal Public Key (p,g,h): {pubkey}")
+            print(f"ElGamal Private Key (x): {privkey}")
+            plaintext = input("Enter message to encrypt: ")
+            msg = text_to_int(plaintext)
+            if msg >= pubkey[0]:
+                print(f"Integer representation of message must be less than p ({pubkey[0]}). Try a shorter message.")
+                continue
+            ciphertext = elgamal_encrypt(msg, pubkey)
+            print("Encrypted:", ciphertext)
+            decrypted_int = elgamal_decrypt(ciphertext, privkey, pubkey[0])
+            decrypted_text = int_to_text(decrypted_int)
+            print("Decrypted:", decrypted_text)
+            
+        elif choice == '4':
+            print("Goodbye!")
+            break
+        else:
+            print("Invalid choice. Try again.")
+
+if __name__ == "__main__":
+    main()

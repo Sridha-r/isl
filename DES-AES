@@ -1,0 +1,134 @@
+from Crypto.Cipher import DES, AES
+from Crypto.Util.Padding import pad, unpad
+from time import perf_counter
+import base64
+
+def des_encrypt(plaintext, key):
+    cipher = DES.new(key, DES.MODE_ECB)
+    pt = pad(plaintext.encode(), DES.block_size)
+    ct = cipher.encrypt(pt)
+    return base64.b64encode(ct).decode()
+
+def des_decrypt(ciphertext, key):
+    cipher = DES.new(key, DES.MODE_ECB)
+    ct = base64.b64decode(ciphertext)
+    pt = unpad(cipher.decrypt(ct), DES.block_size)
+    return pt.decode()
+
+def aes_encrypt(plaintext, key):
+    cipher = AES.new(key, AES.MODE_ECB)
+    pt = pad(plaintext.encode(), AES.block_size)
+    ct = cipher.encrypt(pt)
+    return base64.b64encode(ct).decode()
+
+def aes_decrypt(ciphertext, key):
+    cipher = AES.new(key, AES.MODE_ECB)
+    ct = base64.b64decode(ciphertext)
+    pt = unpad(cipher.decrypt(ct), AES.block_size)
+    return pt.decode()
+
+def get_key(length):
+    while True:
+        key = input(f"Enter key ({length} bytes) as hex string (e.g. A1B2C3D4): ")
+        try:
+            key_bytes = bytes.fromhex(key)
+            if len(key_bytes) > length:
+                print(f"Key too long. Must be exactly {length} bytes or shorter (will pad zeros).")
+                continue
+            elif len(key_bytes) < length:
+                # Pad with zero bytes at the end if too short
+                key_bytes = key_bytes.ljust(length, b'\x00')
+                print(f"Key padded with zeros to {length} bytes: {key_bytes.hex().upper()}")
+            return key_bytes
+        except ValueError:
+            print("Invalid hex string. Please try again.")
+
+
+
+def menu():
+    print("Select Encryption Cipher:")
+    print("1. DES (8 bytes key)")
+    print("2. AES-192 (24 bytes key)")
+    print("3. AES-256 (32 bytes key)")
+    print("4. Compare Time for all (encryption + decryption)")
+    print("5. Exit")
+
+while True:
+    menu()
+    choice = input("Enter choice: ")
+
+    if choice == '5':
+        print("Exiting.")
+        break
+
+    plaintext = input("Enter plaintext: ")
+
+    if choice == '1':
+        key = get_key(8)
+        start_enc = perf_counter()
+        ciphertext = des_encrypt(plaintext, key)
+        end_enc = perf_counter()
+        start_dec = perf_counter()
+        decrypted = des_decrypt(ciphertext, key)
+        end_dec = perf_counter()
+        print(f"Encrypted (Base64): {ciphertext}")
+        print(f"Decrypted text: {decrypted}")
+        print(f"Encryption time: {(end_enc-start_enc)*1000:.3f} ms")
+        print(f"Decryption time: {(end_dec-start_dec)*1000:.3f} ms")
+
+    elif choice == '2':
+        key = get_key(24)
+        start_enc = perf_counter()
+        ciphertext = aes_encrypt(plaintext, key)
+        end_enc = perf_counter()
+        start_dec = perf_counter()
+        decrypted = aes_decrypt(ciphertext, key)
+        end_dec = perf_counter()
+        print(f"Encrypted (Base64): {ciphertext}")
+        print(f"Decrypted text: {decrypted}")
+        print(f"Encryption time: {(end_enc-start_enc)*1000:.3f} ms")
+        print(f"Decryption time: {(end_dec-start_dec)*1000:.3f} ms")
+
+    elif choice == '3':
+        key = get_key(32)
+        start_enc = perf_counter()
+        ciphertext = aes_encrypt(plaintext, key)
+        end_enc = perf_counter()
+        start_dec = perf_counter()
+        decrypted = aes_decrypt(ciphertext, key)
+        end_dec = perf_counter()
+        print(f"Encrypted (Base64): {ciphertext}")
+        print(f"Decrypted text: {decrypted}")
+        print(f"Encryption time: {(end_enc-start_enc)*1000:.3f} ms")
+        print(f"Decryption time: {(end_dec-start_dec)*1000:.3f} ms")
+
+    elif choice == '4':
+        times = {}
+        for cipher_name, key_size, enc_func, dec_func in [
+            ('DES', 8, des_encrypt, des_decrypt),
+            ('AES-192', 24, aes_encrypt, aes_decrypt),
+            ('AES-256', 32, aes_encrypt, aes_decrypt)
+        ]:
+            print(f"\nTesting {cipher_name}...")
+            # Generate dummy key of right size (all 0x01 bytes)
+            key = bytes([1]*key_size)
+            start_enc = perf_counter()
+            ct = enc_func(plaintext, key)
+            end_enc = perf_counter()
+            start_dec = perf_counter()
+            dt = dec_func(ct, key)
+            end_dec = perf_counter()
+            assert dt == plaintext, "Decryption failed!"
+            times[cipher_name] = ((end_enc - start_enc)*1000, (end_dec - start_dec)*1000)
+            print(f"Encrypted (Base64): {ct}")
+            print(f"Decrypted Text: {dt}")
+            print(f"Encryption Time: {(end_enc - start_enc)*1000:.3f} ms")
+            print(f"Decryption Time: {(end_dec - start_dec)*1000:.3f} ms")
+
+        print("\nSummary of times (in ms):")
+        print(f"{'Cipher':<10} {'Encryption':<15} {'Decryption':<15}")
+        for c in times:
+            print(f"{c:<10} {times[c][0]:<15.3f} {times[c][1]:<15.3f}")
+
+    else:
+        print("Invalid choice, try again.")

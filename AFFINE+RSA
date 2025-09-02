@@ -1,0 +1,62 @@
+def mod_inverse(a, m):
+    # Returns modular inverse of a under modulo m
+    a = a % m
+    for x in range(1, m):
+        if (a * x) % m == 1:
+            return x
+    return None
+
+def affine (text,a,b):
+    result = ''
+    for ch in text:
+            val = ((a * (ord(ch) - 65)) + b) % 26
+            result += chr(val + 65)
+    return result
+def affine_decrypt(ciphertext, a, b):
+    result = ''
+    inv_a = mod_inverse(a, 26)
+    for ch in ciphertext:
+        val = (inv_a * ((ord(ch) - 65) - b)) % 26
+        result += chr(val + 65)
+    return result
+
+def generate_rsa_keys():
+    p, q = 61, 53  # Small primes for demo
+    n = p * q
+    phi = (p-1)*(q-1)
+    e = 17  # Public exponent
+    d = mod_inverse(e, phi)
+    return (e, n), (d, n)
+
+def rsa_encrypt(text, public_key):
+    e, n = public_key
+    enc = [pow(ord(ch), e, n) for ch in text]
+    return enc
+def generate_rsa_keys():
+    p, q = 61, 53  # Small primes for demo
+    n = p * q
+    phi = (p-1)*(q-1)
+    e = 17  # Public exponent
+    d = mod_inverse(e, phi)
+    return (e, n), (d, n)
+
+def rsa_decrypt(ciphertext, private_key):
+    d, n = private_key
+    dec = [chr(pow(c, d, n)) for c in ciphertext]
+    return ''.join(dec)
+
+
+if __name__=='__main__':
+      ans=affine('SECURITY',5,8)
+      print('affine encryption',ans)
+
+      public_key,private_key=generate_rsa_keys()
+
+      ans2=rsa_encrypt(ans,public_key)
+
+      print(" answer ",ans2)
+
+      ans3=rsa_decrypt(ans2,private_key)
+      print("rsa decryption ",ans3)
+      ans4= affine_decrypt(ans3,5,8)
+      print(" plaintext",ans4)

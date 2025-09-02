@@ -1,0 +1,62 @@
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
+import base64
+
+# ------ Vigenere Cipher ------
+def vigenere_encrypt(plaintext, key):
+    plaintext = plaintext.replace(" ", "").upper()
+    key = key.upper()
+    ciphertext = ""
+    for i in range(len(plaintext)):
+        p = ord(plaintext[i]) - 65
+        k = ord(key[i % len(key)]) - 65
+        c = (p + k) % 26
+        ciphertext += chr(c + 65)
+    return ciphertext
+
+def vigenere_decrypt(ciphertext, key):
+    key = key.upper()
+    plaintext = ""
+    for i in range(len(ciphertext)):
+        c = ord(ciphertext[i]) - 65
+        k = ord(key[i % len(key)]) - 65
+        p = (c - k) % 26
+        plaintext += chr(p + 65)
+    return plaintext
+
+# ------ AES ------ #
+def aes_encrypt(data, aes_key):
+    data = data.encode()
+    cipher = AES.new(aes_key, AES.MODE_CBC)
+    ct_bytes = cipher.encrypt(pad(data, AES.block_size))
+    iv = base64.b64encode(cipher.iv).decode()
+    ct = base64.b64encode(ct_bytes).decode()
+    return iv, ct
+
+def aes_decrypt(iv, ct, aes_key):
+    iv = base64.b64decode(iv)
+    ct = base64.b64decode(ct)
+    cipher = AES.new(aes_key, AES.MODE_CBC, iv)
+    pt = unpad(cipher.decrypt(ct), AES.block_size)
+    return pt.decode()
+
+# ----------- Demo -----------
+plaintext = "INFORMATIONSECURITY"
+vig_key = "KEY"
+aes_key = b'ThisIsASecretKey'   # 16 bytes (for AES-128)
+
+# Step 1: Vigenere Encrypt
+vig_enc = vigenere_encrypt(plaintext, vig_key)
+print(f"Vigenere Encrypted: {vig_enc}")
+
+# Step 2: AES Encrypt (input must be bytes)
+iv, aes_enc = aes_encrypt(vig_enc, aes_key)
+print(f"AES Encrypted (Base64): {aes_enc}")
+
+# Step 3: AES Decrypt
+aes_dec = aes_decrypt(iv, aes_enc, aes_key)
+print(f"AES Decrypted (Vigenere ciphertext): {aes_dec}")
+
+# Step 4: Vigenere Decrypt
+vig_dec = vigenere_decrypt(aes_dec, vig_key)
+print(f"Vigenere Decrypted (Original plaintext): {vig_dec}")

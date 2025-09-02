@@ -1,0 +1,32 @@
+from Crypto.Cipher import DES
+from Crypto.Util.Padding import pad, unpad
+from Crypto.Random import get_random_bytes
+import base64
+
+# Encrypt function
+def des_encrypt(plaintext, key):
+    cipher = DES.new(key, DES.MODE_CBC)
+    iv = cipher.iv
+    padded_text = pad(plaintext.encode(), DES.block_size)
+    ciphertext = cipher.encrypt(padded_text)
+    # Return IV + ciphertext base64-encoded for easy transport/storage
+    return base64.b64encode(iv + ciphertext).decode()
+
+# Decrypt function
+def des_decrypt(encoded_ciphertext, key):
+    data = base64.b64decode(encoded_ciphertext)
+    iv = data[:DES.block_size]
+    ciphertext = data[DES.block_size:]
+    cipher = DES.new(key, DES.MODE_CBC, iv)
+    padded_plaintext = cipher.decrypt(ciphertext)
+    return unpad(padded_plaintext, DES.block_size).decode()
+
+# Example usage
+key = b'A1B2C3D4'  # 8-byte key for DES, must be bytes
+plaintext = "Confidential Data"
+
+encrypted = des_encrypt(plaintext, key)
+print("Encrypted (Base64):", encrypted)
+
+decrypted = des_decrypt(encrypted, key)
+print("Decrypted:", decrypted)

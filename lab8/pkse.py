@@ -1,86 +1,123 @@
-import base64
+import os
+import pickle
 from phe import paillier
 
-# Dataset
-documents = {
-    1: "apple orange banana",
-    2: "banana fruit apple",
-    3: "fruit salad apple",
-    4: "orange juice",
-    5: "banana smoothie",
-    6: "salad dressing",
-    7: "juice orange apple",
-    8: "smoothie banana fruit",
-    9: "dressing salad fruit",
-    10: "apple banana orange smoothie"
-}
+# ---------- STEP 1: Dataset creation ----------
+def create_documents():
+    if not os.path.exists("documents"):
+        os.makedirs("documents")
 
-# Key generation
-public_key, private_key = paillier.generate_paillier_keypair()
+    docs = {
+        1: "apple orange banana",
+        2: "banana fruit apple",
+        3: "fruit salad apple",
+        4: "orange juice",
+        5: "banana smoothie",
+        6: "salad dressing",
+        7: "juice orange apple",
+        8: "apple pie fruit",
+        9: "fresh orange juice",
+        10: "fruit basket apple banana"
+    }
 
-def encrypt_number(n):
-    return public_key.encrypt(n)
+    for doc_id, text in docs.items():
+        with open(f"documents/doc{doc_id}.txt", "w") as f:
+            f.write(text)
 
-def decrypt_number(c):
-    return private_key.decrypt(c)
+    print("✅ Documents created in 'documents/' folder.")
 
-def encode_ciphertext(c):
-    # Convert encrypted number to base64 string for readable output
-    return base64.b64encode(c.ciphertext().to_bytes((c.ciphertext().bit_length() + 7) // 8, 'big')).decode()
 
-# Build inverted index
-inverted_index = {}
-for doc_id, text in documents.items():
-    for word in text.split():
-        inverted_index.setdefault(word, set()).add(doc_id)
+# ---------- STEP 2: Load or generate Paillier keys ----------
+def save_keys(public_key, private_key):
+    with open("paillier_keys.pkl", "wb") as f:
+        pickle.dump((public_key, private_key), f)
 
-# Encrypt inverted index
-encrypted_index = {}
-for word, doc_ids in inverted_index.items():
-    encrypted_doc_ids = [encrypt_number(doc_id) for doc_id in doc_ids]
-    encrypted_index[word] = encrypted_doc_ids
+def load_keys():
+    if os.path.exists("paillier_keys.pkl"):
+        with open("paillier_keys.pkl", "rb") as f:
+            return pickle.load(f)
+    return None, None
 
-# Show a sample of encrypted index (only first 3 words for brevity)
-print("Encrypted Inverted Index Sample (word -> encrypted doc IDs):\n")
-for i, (word, enc_ids) in enumerate(encrypted_index.items()):
-    print(f"{word}:")
-    for c in enc_ids:
-        print(f"  {encode_ciphertext(c)}")
-    print()
-    if i >= 2:  # show only 3 words
-        break
 
-# Search function with detailed steps
-def search(query):
-    print(f"\nSearching for '{query}':")
-    # Query encrypted? For words, we keep plaintext keys as before.
-    print(f"Query word (plaintext): {query}")
+# ---------- STEP 3: Build inverted index ----------
+def build_index(doc_folder):
+    index = {}
+    for file_name in os.listdir(doc_folder):
+        if file_name.endswith(".txt"):
+            doc_id = int(file_name.replace("doc", "").replace(".txt", ""))
+            with open(os.path.join(doc_folder, file_name), "r") as f:
+                words = f.read().lower().split()
+                for w in words:
+                    index.setdefault(w, set()).add(doc_id)
+    return index
 
-    if query in encrypted_index:
-        encrypted_doc_ids = encrypted_index[query]
-        print("\nEncrypted document IDs:")
-        for c in encrypted_doc_ids:
-            print(f"  {encode_ciphertext(c)}")
 
-        doc_ids = [decrypt_number(c) for c in encrypted_doc_ids]
+# ---------- STEP 4: Deterministic encryption for words ----------
+def det_encrypt_word(word, pubkey):
+    # For demo, use hash-based deterministic “encryption”
+    # (Paillier not meant for text; this keeps mapping stable)
+    return hash(word) % (10 ** 8)
 
-        print("\nDecrypted document IDs:")
-        print(f"  {doc_ids}")
 
-        results = {doc_id: documents[doc_id] for doc_id in doc_ids}
-        print("\nDocuments matching the query:")
-        for doc_id, text in results.items():
-            print(f"  Document {doc_id}: {text}")
+# ---------- STEP 5: Encrypt document IDs using Paillier ----------
+def encrypt_index(index, public_key):
+    enc_index = {}
+    for word, doc_ids in index.items():
+        enc_word = det_encrypt_word(word, public_key)
+        enc_doc_ids = [public_key.encrypt(doc_id) for doc_id in doc_ids]
+        enc_index[enc_word] = enc_doc_ids
+    return enc_index
 
-        return results
+
+# ---------- STEP 6: Search ----------
+def search(enc_index, query, public_key, private_key):
+    enc_query = det_encrypt_word(query, public_key)
+    if enc_query not in enc_index:
+        return []
+
+    encrypted_doc_ids = enc_index[enc_query]
+    return [private_key.decrypt(x) for x in encrypted_doc_ids]
+
+
+# ---------- MAIN ----------
+def main():
+    # Create dataset if not already there
+    if not os.path.exists("documents") or not os.listdir("documents"):
+        create_documents()
     else:
-        print("No matching documents found.")
-        return {}
+        print("Loaded existing documents from 'documents/'.")
 
-# Interactive search for demonstration
-while True:
-    query = input("\nEnter a word to search (or 'exit' to quit): ").strip().lower()
-    if query == "exit":
-        print("Goodbye!")
-        break
-    search(query)
+    # Load or create Paillier keys
+    public_key, private_key = load_keys()
+    if public_key is None:
+        print("🔑 Generating Paillier keypair (this may take a moment)...")
+        public_key, private_key = paillier.generate_paillier_keypair()
+        save_keys(public_key, private_key)
+        print("✅ Keys generated and saved.")
+    else:
+        print("🔐 Loaded existing Paillier keypair from file.")
+
+    # Build and encrypt index
+    print("Building encrypted index...")
+    index = build_index("documents")
+    enc_index = encrypt_index(index, public_key)
+    print(f"🔒 Encrypted index contains {len(enc_index)} unique words.\n")
+
+    # Search loop
+    print("=== PKSE Search Demo ===")
+    print("Type a word to search (e.g., 'apple', 'orange'). Type 'exit' to quit.\n")
+
+    while True:
+        query = input("Search> ").strip().lower()
+        if query == "exit":
+            print("Exiting search.")
+            break
+        results = search(enc_index, query, public_key, private_key)
+        if results:
+            print(f"✅ Word '{query}' found in documents: {sorted(results)}\n")
+        else:
+            print(f"❌ No documents found containing '{query}'.\n")
+
+
+if __name__ == "__main__":
+    main()
